@@ -686,9 +686,19 @@ class PetsGAN():
                         'epoch': epoch + 1},
                        f'{str(self.save_weight_dir)}/co_recnet.pth')
 
-    def sample(self):
+    def sample(self, patch_match_refine = True):
+        if patch_match_refine is True:
+            from Models.TTSR import TTSR
+            kernel_size = 7
+            refiner = TTSR().to(self.device)
+            ref = torch.cat([self.hr_image, torch.flip(self.hr_image, dims = [-1])], dim = -1)
+            kernel_size = 11
+            fold_params_refiner = {'kernel_size': (kernel_size, kernel_size), 'padding': kernel_size // 2, 'stride': 2,
+                           'dilation': 1}
+            divisor_refiner = functions.getDivisor(self.hr_image, fold_params_refiner)
+
         which_G = self.co_G_ema if self.use_ema else self.co_G
-        kernel_size = 7
+
         fold_params = {'kernel_size': (kernel_size, kernel_size), 'padding': kernel_size // 2, 'stride': 1,
                        'dilation': 1}
         divisor = functions.getDivisor(self.lr_image, fold_params)
@@ -703,9 +713,17 @@ class PetsGAN():
                                  '{}/{}.jpg'.format(str(self.save_final_syntheses_dir), 'hr' + str(i)),
                                  nrow = 1)
 
+            if patch_match_refine is True:
+                hr_refined, _ = refiner(hr, ref, ref,
+                                       fold_params = fold_params_refiner,
+                                       divisor = divisor_refiner, n = 10, lv = 1, skip = 4, return_img = True)
+
+                functions.save_image(hr,
+                                     '{}/{}.jpg'.format(str(self.save_final_syntheses_dir), 'hr_refined' + str(i)),
+                                     nrow = 1)
+
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser()
     ''' overall '''
     parser.add_argument('--gpu', type = int, default = 0)
@@ -713,7 +731,7 @@ if __name__ == '__main__':
     parser.add_argument('--hiddenprints', type = bool, default = True)
     parser.add_argument('--model_name', type = str, default = 'test')
     parser.add_argument('--input_dir', type = str, default = 'Input')
-    parser.add_argument('--image_name', type = str, default = '')
+    parser.add_argument('--image_name', type = str, default = 'angkorwat.jpg')
     parser.add_argument('--save_dir', type = str, default = 'Result')
     parser.add_argument('--load_pretrained', type = str, default = 'True')
     parser.add_argument('--beta', type = float, default = 0.1)
