@@ -705,92 +705,92 @@ class PetsGAN():
 
 
 if __name__ == '__main__':
-    for i in os.listdir('Input/places'):
-        parser = argparse.ArgumentParser()
-        ''' overall '''
-        parser.add_argument('--gpu', type = int, default = 0)
-        parser.add_argument('--seed', type = int, default = 0)
-        parser.add_argument('--hiddenprints', type = bool, default = True)
-        parser.add_argument('--model_name', type = str, default = 'test')
-        parser.add_argument('--input_dir', type = str, default = 'Input/places')
-        parser.add_argument('--image_name', type = str, default = i)
-        parser.add_argument('--save_dir', type = str, default = 'Result')
-        parser.add_argument('--load_pretrained', type = str, default = 'True')
-        parser.add_argument('--beta', type = float, default = 0.1)
-        parser.add_argument('--downscale_factor', type = float, default = 8)
-        parser.add_argument('--ref_model', type = str, default = 'test')
-        parser.add_argument('--max_size', type = int, default = 256)
-        parser.add_argument('--lpm_hard', type = bool, default = False)
 
-        # weight
-        parser.add_argument('--co_weight_beta', type = float, default = 100)
-        parser.add_argument('--co_gen_beta', type = float, default = 1)
-        parser.add_argument('--co_rec_beta', type = float, default = 100)
-        parser.add_argument('--co_fd_beta', type = float, default = 0)
+    parser = argparse.ArgumentParser()
+    ''' overall '''
+    parser.add_argument('--gpu', type = int, default = 0)
+    parser.add_argument('--seed', type = int, default = 0)
+    parser.add_argument('--hiddenprints', type = bool, default = True)
+    parser.add_argument('--model_name', type = str, default = 'test')
+    parser.add_argument('--input_dir', type = str, default = 'Input')
+    parser.add_argument('--image_name', type = str, default = '')
+    parser.add_argument('--save_dir', type = str, default = 'Result')
+    parser.add_argument('--load_pretrained', type = str, default = 'True')
+    parser.add_argument('--beta', type = float, default = 0.1)
+    parser.add_argument('--downscale_factor', type = float, default = 8)
+    parser.add_argument('--ref_model', type = str, default = 'test')
+    parser.add_argument('--max_size', type = int, default = 256)
+    parser.add_argument('--lpm_hard', type = bool, default = False)
 
-        ''' model '''
-        parser.add_argument('--recnet_dim', type = int, default = 64)
-        parser.add_argument('--no_updown', type = bool, default = True)
-        parser.add_argument('--code_dim', type = int, default = 3)
-        parser.add_argument('--use_patch_dis', type = bool, default = False)
-        parser.add_argument('--use_ema', type = bool, default = True)
-        parser.add_argument('--upsample_mode', choices = ['conv', 'pixelshuffle', 'deconv', 'interp'], default = 'conv')
-        parser.add_argument('--downsample_mode', choices = ['conv', 'pool', 'interp'], default = 'conv')
-        parser.add_argument('--gen_ref', default = '', type = str)
-        parser.add_argument('--updown_list', default = [1, 1, 1, 1, 1], type = int, nargs = '+')
-        parser.add_argument('--lpm_iter', type = int, default = 10)
-        parser.add_argument('--msd_stage', type = int, default = 3)
-        parser.add_argument('--msd_dim', type = int, default = 64)
+    # weight
+    parser.add_argument('--co_weight_beta', type = float, default = 100)
+    parser.add_argument('--co_gen_beta', type = float, default = 1)
+    parser.add_argument('--co_rec_beta', type = float, default = 100)
+    parser.add_argument('--co_fd_beta', type = float, default = 0)
 
-        ''' learning rate'''
-        parser.add_argument('--lr_g', type = float, default = 1e-4)
-        parser.add_argument('--lr_d', type = float, default = 1e-4)
-        parser.add_argument('--lr_lpm', type = float, default = 1e-5)
-        parser.add_argument('--lr_recnet', type = float, default = 5e-4)
-        parser.add_argument('--lr_D_hr', type = float, default = 1e-4)
-        parser.add_argument('--lr_rates', type = float, nargs = '+', default = [1e-6, 1e-4, 1e-4, 1e-4, 1e-4])
+    ''' model '''
+    parser.add_argument('--recnet_dim', type = int, default = 64)
+    parser.add_argument('--no_updown', type = bool, default = True)
+    parser.add_argument('--code_dim', type = int, default = 3)
+    parser.add_argument('--use_patch_dis', type = bool, default = False)
+    parser.add_argument('--use_ema', type = bool, default = True)
+    parser.add_argument('--upsample_mode', choices = ['conv', 'pixelshuffle', 'deconv', 'interp'], default = 'conv')
+    parser.add_argument('--downsample_mode', choices = ['conv', 'pool', 'interp'], default = 'conv')
+    parser.add_argument('--gen_ref', default = '', type = str)
+    parser.add_argument('--updown_list', default = [1, 1, 1, 1, 1], type = int, nargs = '+')
+    parser.add_argument('--lpm_iter', type = int, default = 10)
+    parser.add_argument('--msd_stage', type = int, default = 3)
+    parser.add_argument('--msd_dim', type = int, default = 64)
 
-        ''' training epoch '''
-        parser.add_argument('--gan_epoch', type = int, default = 5000)
-        parser.add_argument('--D_iter', type = int, default = 1)
-        parser.add_argument('--G_iter', type = int, default = 1)
-        parser.add_argument('--gan_save_epoch', type = int, default = 50)
+    ''' learning rate'''
+    parser.add_argument('--lr_g', type = float, default = 1e-4)
+    parser.add_argument('--lr_d', type = float, default = 1e-4)
+    parser.add_argument('--lr_lpm', type = float, default = 1e-5)
+    parser.add_argument('--lr_recnet', type = float, default = 5e-4)
+    parser.add_argument('--lr_D_hr', type = float, default = 1e-4)
+    parser.add_argument('--lr_rates', type = float, nargs = '+', default = [1e-6, 1e-4, 1e-4, 1e-4, 1e-4])
 
-        parser.add_argument('--recnet_epoch', type = int, default = 5000)
-        parser.add_argument('--recnet_save_epoch', type = int, default = 500)
+    ''' training epoch '''
+    parser.add_argument('--gan_epoch', type = int, default = 5000)
+    parser.add_argument('--D_iter', type = int, default = 1)
+    parser.add_argument('--G_iter', type = int, default = 1)
+    parser.add_argument('--gan_save_epoch', type = int, default = 50)
 
-        parser.add_argument('--co_G_iter', type = int, default = 1)
-        parser.add_argument('--co_D_iter', type = int, default = 1)
-        parser.add_argument('--co_epoch', type = int, default = 5000)
-        parser.add_argument('--co_save_epoch', type = int, default = 100)
+    parser.add_argument('--recnet_epoch', type = int, default = 5000)
+    parser.add_argument('--recnet_save_epoch', type = int, default = 500)
 
-        # training batch
-        parser.add_argument('--gan_batch', type = int, default = 8)
-        parser.add_argument('--recnet_batch', type = int, default = 1)
-        parser.add_argument('--co_batch', type = int, default = 1)
+    parser.add_argument('--co_G_iter', type = int, default = 1)
+    parser.add_argument('--co_D_iter', type = int, default = 1)
+    parser.add_argument('--co_epoch', type = int, default = 5000)
+    parser.add_argument('--co_save_epoch', type = int, default = 100)
 
-        # data augmentation
-        parser.add_argument('--diffaug', type = str, help = 'color,translation,cutout', default = '')
-        parser.add_argument('--mix_ratio', type = float, default = 0.3)
+    # training batch
+    parser.add_argument('--gan_batch', type = int, default = 8)
+    parser.add_argument('--recnet_batch', type = int, default = 1)
+    parser.add_argument('--co_batch', type = int, default = 1)
 
-        opt = parser.parse_args()
-        os.environ['CUDA_VISIBLE_DEVICES'] = f'{opt.gpu}'
-        if opt.model_name is None:
-            time_stamp = time.strftime('%Y-%m-%d#%H#%M#%S', time.localtime(time.time()))
-            opt.model_name = '[' + time_stamp + ']'
-        # opt.device = torch.device("cpu" if opt.gpu is None else "cuda:{}".format(opt.gpu))
-        opt.device = torch.device("cpu" if opt.gpu is None else "cuda:{}".format(0))
-        if torch.cuda.is_available() and opt.gpu is None:
-            print("WARNING: You have a CUDA device, so you should probably run with --cuda")
-        if type(opt.seed) is int:
-            functions.seed_all(opt.seed)
+    # data augmentation
+    parser.add_argument('--diffaug', type = str, help = 'color,translation,cutout', default = '')
+    parser.add_argument('--mix_ratio', type = float, default = 0.3)
 
-        SinGAN = PetsGAN(opt)
-        if opt.ref_model is not None:
-            SinGAN._copy_weights(model_name = opt.ref_model, gan = True, lpm = True, recnet = True, co = False)
-        SinGAN._init_all(gan = True, pm = True, recnet = True, co = True, load_gan = True, load_lpm = True,
-                         load_recnet = True, load_co = True)
-        SinGAN.external_learning()
-        SinGAN.internal_learning()
-        SinGAN.co_learning()
-        SinGAN.sample()
+    opt = parser.parse_args()
+    os.environ['CUDA_VISIBLE_DEVICES'] = f'{opt.gpu}'
+    if opt.model_name is None:
+        time_stamp = time.strftime('%Y-%m-%d#%H#%M#%S', time.localtime(time.time()))
+        opt.model_name = '[' + time_stamp + ']'
+    # opt.device = torch.device("cpu" if opt.gpu is None else "cuda:{}".format(opt.gpu))
+    opt.device = torch.device("cpu" if opt.gpu is None else "cuda:{}".format(0))
+    if torch.cuda.is_available() and opt.gpu is None:
+        print("WARNING: You have a CUDA device, so you should probably run with --cuda")
+    if type(opt.seed) is int:
+        functions.seed_all(opt.seed)
+
+    SinGAN = PetsGAN(opt)
+    if opt.ref_model is not None:
+        SinGAN._copy_weights(model_name = opt.ref_model, gan = True, lpm = True, recnet = True, co = False)
+    SinGAN._init_all(gan = True, pm = True, recnet = True, co = True, load_gan = True, load_lpm = True,
+                     load_recnet = True, load_co = True)
+    SinGAN.external_learning()
+    SinGAN.internal_learning()
+    SinGAN.co_learning()
+    SinGAN.sample()
