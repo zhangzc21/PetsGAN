@@ -718,7 +718,7 @@ class PetsGAN():
                                        fold_params = fold_params_refiner,
                                        divisor = divisor_refiner, n = 10, lv = 1, skip = 4, return_img = True)
 
-                functions.save_image(hr,
+                functions.save_image(hr_refined,
                                      '{}/{}.jpg'.format(str(self.save_final_syntheses_dir), 'hr_refined' + str(i)),
                                      nrow = 1)
 
