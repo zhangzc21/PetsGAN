@@ -1,7 +1,6 @@
 # PetsGAN
 [![arXiv](https://img.shields.io/badge/arXiv-2203.01488-b31b1b.svg)](https://arxiv.org/abs/2203.01488) \
 This resposity contains the code for **PetsGAN: Rethinking Priors for Single Image Generation (AAAI 2022)**. \
-Usage will be released soon.
 
 ```
 python main.py --input_dir input_dir --image_name image_name 
