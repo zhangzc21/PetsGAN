@@ -689,25 +689,19 @@ class PetsGAN():
     def sample(self, patch_match_refine = True):
         if patch_match_refine is True:
             from Models.TTSR import TTSR
-            kernel_size = 7
+            kernel_size = 31
             refiner = TTSR().to(self.device)
             ref = torch.cat([self.hr_image, torch.flip(self.hr_image, dims = [-1])], dim = -1)
-            kernel_size = 11
             fold_params_refiner = {'kernel_size': (kernel_size, kernel_size), 'padding': kernel_size // 2, 'stride': 2,
                            'dilation': 1}
             divisor_refiner = functions.getDivisor(self.hr_image, fold_params_refiner)
 
         which_G = self.co_G_ema if self.use_ema else self.co_G
-
-        fold_params = {'kernel_size': (kernel_size, kernel_size), 'padding': kernel_size // 2, 'stride': 1,
-                       'dilation': 1}
-        divisor = functions.getDivisor(self.lr_image, fold_params)
-        import time
         for i in range(30):
             z = torch.randn(1, 1, self.lr_h, self.lr_w).to(self.device)
             lr = which_G(z)
-            lr_pm, _ = self.lpm(lr, self.ref_image, fold_params = fold_params, divisor = divisor, n = self.lpm_iter,
-                                hard = self.lpm_hard, tao = 0.00001)
+            lr_pm, _ = self.lpm(lr, self.ref_image, fold_params = self.fold_params, divisor = self.divisor,
+                         n = self.lpm_iter, hard = False, tao = 0.00001)
             hr = self.co_recnet(lr_pm)
             functions.save_image(hr,
                                  '{}/{}.jpg'.format(str(self.save_final_syntheses_dir), 'hr' + str(i)),
@@ -721,6 +715,114 @@ class PetsGAN():
                 functions.save_image(hr_refined,
                                      '{}/{}.jpg'.format(str(self.save_final_syntheses_dir), 'hr_refined' + str(i)),
                                      nrow = 1)
+
+    def hr_learning(self):
+        from Models.TTSR import TTSR
+        ttsr = TTSR().to(self.divisor)
+        self.save_hr_dir = self.save_dir / 'high_resolution'
+        self.save_hr_dir.mkdir(parents = True, exist_ok = True)
+        from Models.models import hrnet # hrnet is an up-sampling network
+        up_factor = opt.max_size // 256
+        self.hrnet = hrnet(dim =64, up_factor = up_factor).to(self.device)
+        torchsummary.summary(self.hrnet, input_size = (3, self.hr_h, self.hr_w))
+
+        hr_h = up_factor * self.hr_h
+        hr_w = up_factor * self.hr_w
+        hr = self.resize(self.origin, size = [hr_h, hr_w])
+
+        _noise = torch.randn(1, 1, self.lr_h, self.lr_w).to(self.device)
+        fake_lr, _ = self.lpm(self.co_G(_noise), self.ref_image, fold_params = self.fold_params,
+                              divisor = self.divisor,
+                              n = self.lpm_iter,
+                              hard = self.lpm_hard)
+        fake_hr = self.co_recnet(fake_lr)
+        fake_probe = fake_hr
+        ref = torch.cat([self.hr_image, torch.flip(self.hr_image, dims = [-1])], dim = -1)
+
+        ks = 31
+        fold_params = {'kernel_size': (ks, ks), 'padding': ks // 2, 'stride': 2, 'dilation': 1}
+        divisor = functions.getDivisor(fake_probe, fold_params)
+        fake_probe, _ = ttsr(fake_probe, ref, ref, fold_params = fold_params,
+                                   divisor = divisor, n = 10, lv = 1, skip = 4, return_img = True)
+
+        functions.save_image(fake_hr, f'{str(self.save_hr_dir)}/fake.png',
+                             nrow = 1)
+        functions.save_image(fake_probe, f'{str(self.save_hr_dir)}/fake_hr.png',
+                             nrow = 1)
+        functions.save_image(hr, f'{str(self.save_hr_dir)}/hr.png',
+                             nrow = 1)
+        functions.save_image(self.hr_image, f'{str(self.save_hr_dir)}/lr.png',
+                             nrow = 1)
+
+
+        start_epoch = 0
+        optimizer_hrnet = torch.optim.Adam(self.hrnet.parameters(), lr = 1e-4)
+        try:
+            pretrained_hrnet = torch.load(f'{str(self.save_weight_dir)}/hr.pth')
+            self.hrnet.load_state_dict(pretrained_hrnet['hrnet'])
+            start_epoch = pretrained_hrnet['epoch']
+            optimizer_hrnet.load_state_dict(pretrained_hrnet['optimizer_G'])
+            print('pretrained hrnet exists.')
+        except:
+            print('no pretrained hr net')
+            pass
+
+        end_epoch = self.opt.hr_epoch
+        EPOCHS = tqdm(range(start_epoch, end_epoch))
+        save_epoch = 100
+
+
+        real_data = [hr, torch.flip(hr, dims = [-1])]
+        real_data_lr = [self.hr_image, torch.flip(self.hr_image, dims = [-1])]
+        real_hr = torch.cat(real_data)
+        real_lr = torch.cat(real_data_lr)
+        #############
+        for epoch in EPOCHS:
+            if self.opt.hr_batch == 2:
+                index =[0,1]
+            else:
+                index = [random.randint(0, 1)]
+
+            optimizer_hrnet.zero_grad()
+            rec = self.hrnet(real_lr[index,...])
+            rec_loss =  F.mse_loss(rec, real_hr[index,...])
+            rec_loss.backward()
+            optimizer_hrnet.step()
+
+            EPOCHS.set_postfix(rec_loss = rec_loss.item())
+            with torch.no_grad():
+                if (epoch + 1) % save_epoch == 0 or epoch == 0:
+                    self.co_G_ema.eval()
+                    torch.save({'hrnet': self.hrnet.state_dict(),
+                                 'optimizer_G': optimizer_hrnet.state_dict(),
+                                'epoch': epoch + 1},
+                               f'{str(self.save_weight_dir)}/hr.pth')
+                    # fake = self.G(_noise)
+
+                    save_hr = self.hrnet(fake_probe)
+                    functions.save_image(save_hr, f'{str(self.save_hr_dir)}/training_{epoch + 1}.png',
+                                         nrow = 1)
+                    functions.save_image(rec, f'{str(self.save_hr_dir)}/rec.png',
+                                         nrow = 1)
+                    del save_hr
+
+
+        for i in range(30):
+            noise = torch.randn(1, 1, self.lr_h, self.lr_w).to(self.device)
+            with torch.no_grad():
+                fake_lr, _ = self.lpm(self.co_G(noise), self.ref_image, fold_params = self.fold_params,
+                                      divisor = self.divisor,
+                                      n = self.lpm_iter,
+                                      hard = self.lpm_hard)
+                fake_hr_ = self.co_recnet(fake_lr)
+                if i == 0:
+                    divisor = functions.getDivisor(fake_hr_, fold_params)
+                fake_hr_pm, _ = ttsr(fake_hr_, ref, ref, fold_params = fold_params,
+                                     divisor = divisor, n = 10, lv =1, skip = 4, return_img = True)
+                fake_hr_pm = self.hrnet(fake_hr_pm)
+                functions.save_image(fake_hr_pm, f'{str(self.save_hr_dir)}/hr_{i}.png',
+                                     nrow = 1)
+                del fake_hr_pm
 
 
 if __name__ == '__main__':
@@ -737,7 +839,7 @@ if __name__ == '__main__':
     parser.add_argument('--beta', type = float, default = 0.1)
     parser.add_argument('--downscale_factor', type = float, default = 8)
     parser.add_argument('--ref_model', type = str, default = 'test')
-    parser.add_argument('--max_size', type = int, default = 256)
+    parser.add_argument('--max_size', type = int, default = 256, help ='an integer multiple of 256')
     parser.add_argument('--lpm_hard', type = bool, default = False)
 
     # weight
@@ -782,10 +884,13 @@ if __name__ == '__main__':
     parser.add_argument('--co_epoch', type = int, default = 5000)
     parser.add_argument('--co_save_epoch', type = int, default = 100)
 
+    parser.add_argument('--hr_epoch', type = int, default = 5000)
+
     # training batch
     parser.add_argument('--gan_batch', type = int, default = 8)
     parser.add_argument('--recnet_batch', type = int, default = 1)
     parser.add_argument('--co_batch', type = int, default = 1)
+    parser.add_argument('--hr_batch', type = int, default = 2)
 
     # data augmentation
     parser.add_argument('--diffaug', type = str, help = 'color,translation,cutout', default = '')
@@ -812,3 +917,8 @@ if __name__ == '__main__':
     SinGAN.internal_learning()
     SinGAN.co_learning()
     SinGAN.sample()
+
+    if opt.max_size > 256:
+        if opt.max_size % 256 != 0:
+            print("Please set max_size to an integer multiple of 256")
+        SinGAN.hr_learning()
