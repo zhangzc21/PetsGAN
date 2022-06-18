@@ -9,7 +9,7 @@ from Utils import functions
 import einops
 
 class upsample(nn.Module):
-    def __init__(self, dim, block_size, halo_size, heads=4, mode='halo'):
+    def __init__(self, dim, block_size, halo_size, heads=4, mode='interp'):
         super(upsample, self).__init__()
 
         blocks = nn.ModuleList()
@@ -33,7 +33,7 @@ class upsample(nn.Module):
             blocks.append(nn.ConvTranspose2d(dim, dim, kernel_size=6, padding=2, stride=2,
                                              padding_mode='zeros'))
         elif mode == 'interp':
-            blocks.append(nn.Upsample(scale_factor=2.0, mode='bicubic'))
+            blocks.append(nn.Upsample(scale_factor=2.0, mode='bilinear'))
 
         self.blocks = blocks
 
@@ -204,199 +204,6 @@ class Discriminator_Hr(nn.Module):
 
         return x
 
-# class MS_Discriminator(nn.Module):
-#     """ Discriminator of the GAN """
-#
-#     def __init__(self, stage = 2, dim = 128):
-#         """
-#         constructor for the class
-#         :param depth: total depth of the discriminator
-#                        (Must be equal to the Generator depth)
-#         :param dim: size of the deepest features extracted
-#                              (Must be equal to Generator latent_size)
-#         :param use_eql: whether to use the equalized learning rate or not
-#         :param gpu_parallelize: whether to use DataParallel on the discriminator
-#                                 Note that the Last block contains StdDev layer
-#                                 So, it is not parallelized.
-#         """
-#
-#         super().__init__()
-#
-#         # create state of the object
-#         self.stage = stage
-#         original_dim = dim
-#         spectral_norm = False
-#         padding_mode = 'zeros'
-#         self.head =  ConvBlock(in_channels = 3, out_channels = original_dim, kernel_size = 3, stride = 1, padding = 1,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode,
-#                           spectral_norm = spectral_norm,
-#                           dilation = 1)
-#         # create the fromRGB layers for various inputs:
-#         for i in range(stage):
-#             dim = int(dim / 2)
-#             kernel_size = 1 + 2*(i+1)
-#             dilation = 1
-#             padding = kernel_size // 2
-#             blocks = nn.Sequential(
-#                 ConvBlock(in_channels = original_dim, out_channels = dim, kernel_size = 3, stride = 1,
-#                           padding = 1,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                           dilation = dilation),
-#                 ConvBlock(in_channels = dim, out_channels = dim, kernel_size = kernel_size, stride = 1, padding = padding,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                           dilation = dilation),
-#                 ConvBlock(in_channels = dim, out_channels = dim, kernel_size = kernel_size, stride = 1, padding = padding,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                           dilation = dilation),
-#                 ConvBlock(in_channels = dim, out_channels = dim, kernel_size = kernel_size, stride = 1, padding = padding,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                           dilation = dilation),
-#                 nn.Conv2d(in_channels = dim, out_channels = 1, kernel_size = kernel_size, stride = 1, padding = padding, dilation = 1,
-#                      padding_mode = padding_mode)
-#             )
-#             setattr(self, f'feature{i}', blocks)
-#         setattr(self, f'feature{stage}', blocks)
-#
-#
-#     def forward(self, x):
-#         """
-#         forward pass of the discriminator
-#         :param inputs: (multi-scale input images) to the network list[Tensors]
-#         :return: out => raw prediction values
-#         """
-#         y = 0
-#         x = self.head(x)
-#         for i in range(self.stage+1):
-#             # if i > 0:
-#             #     x += x_
-#             y += getattr(self, f'feature{i}')(x)
-#         return y
-
-# class MS_Discriminator(nn.Module):
-#     """ Discriminator of the GAN """
-#
-#     def __init__(self, stage = 2, dim = 128):
-#         """
-#         constructor for the class
-#         :param depth: total depth of the discriminator
-#                        (Must be equal to the Generator depth)
-#         :param dim: size of the deepest features extracted
-#                              (Must be equal to Generator latent_size)
-#         :param use_eql: whether to use the equalized learning rate or not
-#         :param gpu_parallelize: whether to use DataParallel on the discriminator
-#                                 Note that the Last block contains StdDev layer
-#                                 So, it is not parallelized.
-#         """
-#
-#         super().__init__()
-#
-#         # create state of the object
-#         self.stage = stage
-#         original_dim = dim
-#         spectral_norm = False
-#         padding_mode = 'zeros'
-#         self.head =  ConvBlock(in_channels = 3, out_channels = original_dim, kernel_size = 3, stride = 1, padding = 1,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode,
-#                           spectral_norm = spectral_norm,
-#                           dilation = 1)
-#         # create the fromRGB layers for various inputs:
-#         for i in range(stage):
-#             dim = original_dim
-#             kernel_size = 3
-#             dilation = 1
-#             padding = kernel_size // 2
-#             blocks = nn.Sequential(
-#                 ConvBlock(in_channels = original_dim, out_channels = dim, kernel_size = 3, stride = 1,
-#                           padding = 1,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                           dilation = dilation),
-#                 ConvBlock(in_channels = dim, out_channels = dim, kernel_size = kernel_size, stride = 1, padding = padding,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                           dilation = dilation),
-#                 ConvBlock(in_channels = dim, out_channels = dim, kernel_size = kernel_size, stride = 1, padding = padding,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                           dilation = dilation),
-#                 ConvBlock(in_channels = dim, out_channels = dim, kernel_size = kernel_size, stride = 1, padding = padding,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                           dilation = dilation),
-#                 nn.Conv2d(in_channels = dim, out_channels = 1, kernel_size = kernel_size, stride = 1, padding = padding, dilation = 1,
-#                      padding_mode = padding_mode)
-#             )
-#             setattr(self, f'feature{i}', blocks)
-#         setattr(self, f'feature{stage}', blocks)
-#
-#
-#     def forward(self, x):
-#         """
-#         forward pass of the discriminator
-#         :param inputs: (multi-scale input images) to the network list[Tensors]
-#         :return: out => raw prediction values
-#         """
-#         y = 0
-#         x = self.head(x)
-#         for i in range(self.stage+1):
-#             # if i > 0:
-#             #     x += x_
-#             y += getattr(self, f'feature{i}')(x)
-#         return y
-
-# class MS_Discriminator(nn.Module):
-#     """ Discriminator of the GAN """
-#
-#     def __init__(self, stage = 2, dim = 128):
-#         """
-#         constructor for the class
-#         :param depth: total depth of the discriminator
-#                        (Must be equal to the Generator depth)
-#         :param dim: size of the deepest features extracted
-#                              (Must be equal to Generator latent_size)
-#         :param use_eql: whether to use the equalized learning rate or not
-#         :param gpu_parallelize: whether to use DataParallel on the discriminator
-#                                 Note that the Last block contains StdDev layer
-#                                 So, it is not parallelized.
-#         """
-#
-#         super().__init__()
-#
-#         # create state of the object
-#         self.stage = stage
-#         self.dim = dim
-#         spectral_norm = False
-#         padding_mode = 'zeros'
-#         self.factors = [0.5, 0.75, 1.0][-stage:]
-#         for i in range(stage):
-#             kernel_size = 3
-#             dilation = 1
-#             padding = 1
-#             blocks = nn.Sequential(
-#                 ConvBlock(in_channels = 3, out_channels = dim, kernel_size = 3, stride = 1, padding = 1,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                           dilation = 1),
-#                 ConvBlock(in_channels = dim, out_channels = dim, kernel_size = kernel_size, stride = 1, padding = padding,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                           dilation = dilation),
-#                 ConvBlock(in_channels = dim, out_channels = dim, kernel_size = kernel_size, stride = 1, padding = padding,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                           dilation = dilation),
-#                 ConvBlock(in_channels = dim, out_channels = dim, kernel_size = kernel_size, stride = 1, padding = padding,
-#                           norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                           dilation = dilation),
-#                 nn.Conv2d(in_channels = dim, out_channels = 1, kernel_size = kernel_size, stride = 1, padding = padding,
-#                           padding_mode = padding_mode)
-#             )
-#             setattr(self, f'feature{i}', blocks)
-#
-#     def forward(self, input):
-#         """
-#         forward pass of the discriminator
-#         :param inputs: (multi-scale input images) to the network list[Tensors]
-#         :return: out => raw prediction values
-#         """
-#
-#         for i in range(self.stage):
-#             x = torch.nn.functional.interpolate(input, scale_factor = self.factors[i])
-#             y += torch.mean(getattr(self, f'feature{i}')(x))
-#         return y
 
 class MS_Discriminator(nn.Module):
     """ Discriminator of the GAN """
@@ -479,68 +286,6 @@ class MS_Discriminator(nn.Module):
         #     y += getattr(self, f'k5feature{i}')(x)
         return y
 
-# class MS_Discriminator(nn.Module):
-#     """ Discriminator of the GAN """
-#
-#     def __init__(self, stage = 2, dim = 128):
-#         """
-#         constructor for the class
-#         :param depth: total depth of the discriminator
-#                        (Must be equal to the Generator depth)
-#         :param dim: size of the deepest features extracted
-#                              (Must be equal to Generator latent_size)
-#         :param use_eql: whether to use the equalized learning rate or not
-#         :param gpu_parallelize: whether to use DataParallel on the discriminator
-#                                 Note that the Last block contains StdDev layer
-#                                 So, it is not parallelized.
-#         """
-#
-#         super().__init__()
-#
-#         # create state of the object
-#         self.stage = stage
-#         self.dim = dim
-#         spectral_norm = False
-#         padding_mode = 'reflect'
-#
-#         self.blocks = nn.Sequential(
-#             ConvBlock(in_channels = 3, out_channels = dim, kernel_size = 3, stride = 1, padding = 1,
-#                       norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                       dilation = 1),
-#             ConvBlock(in_channels = dim, out_channels = dim, kernel_size = 3, stride = 1, padding = 1,
-#                       norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                       dilation = 1),
-#             ConvBlock(in_channels = dim, out_channels = dim, kernel_size = 3, stride = 1, padding = 1,
-#                       norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                       dilation = 1),
-#             ConvBlock(in_channels = dim, out_channels = dim, kernel_size = 3, stride = 1, padding = 1,
-#                       norm = 'in', act = 'leakyrelu', padding_mode = padding_mode, spectral_norm = spectral_norm,
-#                       dilation = 1),
-#
-#         )
-#
-#         for i in range(stage):
-#             kernel_size = 5
-#             dilation = stage+1
-#             padding = dilation*(2)
-#             dis = nn.Conv2d(in_channels = dim, out_channels = 1, kernel_size = kernel_size, stride = 1, padding = padding, dilation = 1)
-#             setattr(self, f'dis{i}', dis)
-#
-#
-#
-#     def forward(self, x):
-#         """
-#         forward pass of the discriminator
-#         :param inputs: (multi-scale input images) to the network list[Tensors]
-#         :return: out => raw prediction values
-#         """
-#         for block in self.blocks:
-#             x = block(x)
-#
-#         y = 0
-#         for i in range(self.stage):
-#             y += getattr(self, f'dis{i}')(x)
-#         return y
 
 class Generator(nn.Module):
     '''
@@ -623,84 +368,26 @@ class recnet(nn.Module):
         return x
 
 
-# class hrnet(nn.Module):
-#     def __init__(self, dim=64):
-#         super(hrnet, self).__init__()
-#         self.blocks = nn.ModuleList()
-#         self.blocks.append(ConvBlock(in_channels = 3, out_channels = dim,
-#                               stride = 1, kernel_size = 3,
-#                               padding = 1, padding_mode = 'replicate', norm = 'in', act = 'leakyrelu',
-#                               spectral_norm = False))
-#         for i in range(3):
-#             block = ConvBlock(in_channels = dim, out_channels = dim,
-#                               stride = 1, kernel_size = 3,
-#                               padding = 1, padding_mode = 'replicate', norm = 'in', act = 'leakyrelu',
-#                               spectral_norm = False)
-#             self.blocks.append(block)
-#         self.blocks.append(nn.Conv2d(in_channels = dim, out_channels = 3,
-#                                      stride = 1, kernel_size = 3,
-#                                      padding = 1, padding_mode = 'replicate'))
-#         self.blocks.append(nn.Tanh())
-#     def forward(self, input):
-#         x = input
-#         for block in self.blocks:
-#             x = block(x)
-#         return x
-
 class hrnet(nn.Module):
-    def __init__(self, dim=64):
+    def __init__(self, dim=64, up_factor = 4):
         super(hrnet, self).__init__()
+        import math
+        n = int(math.log2(up_factor))
         self.blocks = nn.ModuleList()
         self.blocks.append(ConvBlock(in_channels = 3, out_channels = dim,
-                              stride = 1, kernel_size = 3,
-                              padding = 1, padding_mode = 'replicate', norm = 'in', act = 'leakyrelu',
-                              spectral_norm = False))
-        for i in range(3):
+                                     stride = 1, kernel_size = 3,
+                                     padding = 1, padding_mode = 'replicate', norm = 'in', act = 'leakyrelu',
+                                     spectral_norm = False))
+        for i in range(n):
             self.blocks.append(ConvBlock(in_channels = dim, out_channels = dim,
                                          stride = 1, kernel_size = 3,
                                          padding = 1, padding_mode = 'replicate', norm = 'in', act = 'leakyrelu',
                                          spectral_norm = False))
+            self.blocks.append(upsample(dim, 2, 1, heads = 4, mode = 'deconv'))
 
-        self.blocks.append(upsample(dim, 2, 1, heads = 4, mode = 'conv'))
-        for i in range(3):
-            self.blocks.append(ConvBlock(in_channels = dim, out_channels = dim,
-                                         stride = 1, kernel_size = 7,
-                                         padding = 3, padding_mode = 'replicate', norm = 'in', act = 'leakyrelu',
-                                         spectral_norm = False))
         self.blocks.append(nn.Conv2d(in_channels = dim, out_channels = 3,
-                                     stride = 1, kernel_size = 7,
-                                     padding = 3, padding_mode = 'replicate'))
-        self.blocks.append(nn.Tanh())
-    def forward(self, input):
-        x = input
-        for block in self.blocks:
-            x = block(x)
-        return x
-
-class hrnet1024(nn.Module):
-    def __init__(self, dim=64):
-        super(hrnet1024, self).__init__()
-        self.blocks = nn.ModuleList()
-        self.blocks.append(ConvBlock(in_channels = 3, out_channels = dim,
-                              stride = 1, kernel_size = 3,
-                              padding = 1, padding_mode = 'replicate', norm = 'in', act = 'leakyrelu',
-                              spectral_norm = False))
-        for i in range(3):
-            self.blocks.append(ConvBlock(in_channels = dim, out_channels = dim,
-                                         stride = 1, kernel_size = 3,
-                                         padding = 1, padding_mode = 'replicate', norm = 'in', act = 'leakyrelu',
-                                         spectral_norm = False))
-
-        self.blocks.append(upsample(dim, 2, 1, heads = 4, mode = 'conv'))
-        for i in range(3):
-            self.blocks.append(ConvBlock(in_channels = dim, out_channels = dim,
-                                         stride = 1, kernel_size = 3,
-                                         padding = 1, padding_mode = 'replicate', norm = 'in', act = 'leakyrelu',
-                                         spectral_norm = False))
-        self.blocks.append(upsample(dim, 2, 1, heads = 4, mode = 'conv'))
-        self.blocks.append(nn.Conv2d(in_channels = dim, out_channels = 3,
-                                     stride = 1, kernel_size = 7,
-                                     padding = 3, padding_mode = 'replicate'))
+                                     stride = 1, kernel_size = 3,
+                                     padding = 1, padding_mode = 'replicate'))
         self.blocks.append(nn.Tanh())
     def forward(self, input):
         x = input
@@ -709,136 +396,5 @@ class hrnet1024(nn.Module):
         return x
 
 
-class dbpn_docoder(nn.Module):
-    def __init__(self, code_dim, dim, kernel_size=3, stride=2, padding=1, bias=True, activation='lrelu',
-                 norm='instance', scale=2):
-        import dbpn
-        super(dbpn_docoder, self).__init__()
-        self.head = nn.ModuleList()
-        self.head.append(nn.Conv2d(code_dim, dim, 1, 1, 0))
-        self.head.append(nn.InstanceNorm2d(dim))
-        self.head.append(nn.LeakyReLU())
-        self.head.append(nn.Conv2d(dim, dim, 1, 1, 0))
-
-        self.body = nn.ModuleList()
-        self.body.append(
-            dbpn.UpBlockPix(dim, kernel_size=kernel_size, stride=stride, padding=padding, bias=True, activation='lrelu',
-                            norm='instance', scale=2))
-        self.body.append(
-            dbpn.UpBlockPix(dim, kernel_size=kernel_size, stride=stride, padding=padding, bias=True, activation='lrelu',
-                            norm='instance', scale=2))
-        self.body.append(
-            dbpn.UpBlockPix(dim, kernel_size=kernel_size, stride=stride, padding=padding, bias=True, activation='lrelu',
-                            norm='instance', scale=2))
-        # x4
-        self.tail = nn.ModuleList()
-        self.tail.append(
-            ConvBlocks(n=1, in_channels=dim, out_channels=dim // 2, padding_mode='replicate',
-                       kernel_size=7,
-                       padding=3, stride=1))
-        self.tail.append(nn.Conv2d(dim // 2, 3, 1, 1, 0))
-        self.tail.append(nn.Tanh())
-
-    def forward(self, x):
-        for block in self.head:
-            x = block(x)
-        for block in self.body:
-            x = block(x)
-        for block in self.tail:
-            x = block(x)
-        return x
 
 
-# class ddbpn_docoder(nn.Module):
-#     def __init__(self, dim, code_dim, updown_list, downsample_mode = 'conv', upsample_mode = 'pixelshuffle'):
-#         super(ddbpn_docoder, self).__init__()
-#         blocks = nn.ModuleList()
-#         blocks.append(nn.Conv2d(code_dim, dim, 1, 1, 0))
-#         blocks.append(nn.InstanceNorm2d(dim))
-#         blocks.append(nn.LeakyReLU())
-#         blocks.append(nn.Conv2d(dim, dim, 1, 1, 0))
-#         self.head = blocks
-#         # # x1
-#         # blocks.append(downsample(dim, dim, mode = downsample_mode))
-#         # blocks.append(upsample(dim, 1, 0, mode = 'pixelshuffle'))
-#         # blocks.append(downsample(dim, dim, mode = downsample_mode))
-#         # blocks.append(upsample(dim, 1, 0, mode = 'pixelshuffle'))
-#         # x2
-#         self.up1 = upsample(dim, 1, 0, mode = upsample_mode)
-#         self.down1 = downsample(dim, dim, mode = downsample_mode)
-#
-#         self.up2 = upsample(dim, 1, 0, mode = upsample_mode)
-#         self.down2 = downsample(dim, dim, mode = downsample_mode)
-#
-#         self.up3 = upsample(dim, 1, 0, mode = upsample_mode)
-#         self.down3 = D_DownBlock(base_filter, kernel, stride, padding, 3)
-#         self.up4 = D_UpBlock(base_filter, kernel, stride, padding, 3)
-#         self.down4 = D_DownBlock(base_filter, kernel, stride, padding, 4)
-#         self.up5 = D_UpBlock(base_filter, kernel, stride, padding, 4)
-#         self.down5 = D_DownBlock(base_filter, kernel, stride, padding, 5)
-#         self.up6 = D_UpBlock(base_filter, kernel, stride, padding, 5)
-#         self.down6 = D_DownBlock(base_filter, kernel, stride, padding, 6)
-#         self.up7 = D_UpBlock(base_filter, kernel, stride, padding, 6)
-#
-#         # to rgb
-#
-#         blocks.append(
-#             ConvBlocks(n=1, in_channels=dim, out_channels=dim // 2, padding_mode='replicate',
-#                        kernel_size=7,
-#                        padding=3, stride=1))
-#         blocks.append(nn.Conv2d(dim // 2, 3, 1, 1, 0))
-#         blocks.append(nn.Tanh())
-#
-#         self.blocks = blocks
-#
-#     def forward(self, x):
-#         for block in self.blocks:
-#             x = block(x)
-#
-#         h1 = self.up1(x)
-#         l1 = self.down1(h1)
-#         h2 = self.up2(l1)
-#
-#         concat_h = torch.cat((h2, h1), 1)
-#         l = self.down2(concat_h)
-#
-#         concat_l = torch.cat((l, l1), 1)
-#         h = self.up3(concat_l)
-#
-#         concat_h = torch.cat((h, concat_h), 1)
-#         l = self.down3(concat_h)
-#
-#         concat_l = torch.cat((l, concat_l), 1)
-#         h = self.up4(concat_l)
-#
-#         concat_h = torch.cat((h, concat_h), 1)
-#         l = self.down4(concat_h)
-#
-#         concat_l = torch.cat((l, concat_l), 1)
-#         h = self.up5(concat_l)
-#
-#         concat_h = torch.cat((h, concat_h), 1)
-#         l = self.down5(concat_h)
-#
-#         concat_l = torch.cat((l, concat_l), 1)
-#         h = self.up6(concat_l)
-#
-#         concat_h = torch.cat((h, concat_h), 1)
-#         l = self.down6(concat_h)
-#
-#         concat_l = torch.cat((l, concat_l), 1)
-#         h = self.up7(concat_l)
-#
-#         concat_h = torch.cat((h, concat_h), 1)
-#         x = self.output_conv(concat_h)
-
-
-if __name__ == '__main__':
-    pm = patch_match().float()
-    x = functions.read_image(r'Input/Images/colusseum.png')
-    x = functions.resize(x, size=[128, 128])
-    ref = x
-    fold_params = {'kernel_size': (3, 3), 'padding': 1, 'stride': 1, 'dilation': 1}
-    divisor = functions.getDivisor(x, fold_params)
-    x_pm, attn = pm(x, ref, fold_params=fold_params, divisor=divisor, n=1)
-    functions.show_image(x_pm)
