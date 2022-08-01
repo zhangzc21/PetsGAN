@@ -689,7 +689,7 @@ class PetsGAN():
     def sample(self, patch_match_refine = True):
         if patch_match_refine is True:
             from Models.TTSR import TTSR
-            kernel_size = 31
+            kernel_size =11
             refiner = TTSR().to(self.device)
             ref = torch.cat([self.hr_image, torch.flip(self.hr_image, dims = [-1])], dim = -1)
             fold_params_refiner = {'kernel_size': (kernel_size, kernel_size), 'padding': kernel_size // 2, 'stride': 2,
@@ -710,7 +710,7 @@ class PetsGAN():
             if patch_match_refine is True:
                 hr_refined, _ = refiner(hr, ref, ref,
                                        fold_params = fold_params_refiner,
-                                       divisor = divisor_refiner, n = 10, lv = 1, skip = 4, return_img = True)
+                                       divisor = divisor_refiner, n = 10, lv = 1, skip =4, return_img = True)
 
                 functions.save_image(hr_refined,
                                      '{}/{}.jpg'.format(str(self.save_final_syntheses_dir), 'hr_refined' + str(i)),
