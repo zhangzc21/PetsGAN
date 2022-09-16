@@ -45,7 +45,7 @@ class PetsGAN():
         self.save_dir = pathlib.Path(opt.save_dir)
 
         self.stages = int(math.log2(self.downscale_factor))
-
+        self.use_flip = self.opt.use_flip
         self.resize = functools.partial(F.interpolate, mode = 'bicubic', align_corners = True)
         self.gan_start_epoch = 0
         self.recnet_start_epoch = 0
@@ -399,9 +399,12 @@ class PetsGAN():
         fold_params = {'kernel_size': (7, 7), 'padding': 3, 'stride': 1, 'dilation': 1}
         divisor = functions.getDivisor(self.lr_image, fold_params)
 
-        # torch.flip(self.hr_image, dims = [-1])
-        hr_data = [self.hr_image, torch.flip(self.hr_image, dims = [-1])]
-        lr_data = [self.lr_image, torch.flip(self.lr_image, dims = [-1])]
+        if self.use_flip:
+            hr_data = [self.hr_image, torch.flip(self.hr_image, dims = [-1])]
+            lr_data = [self.lr_image, torch.flip(self.lr_image, dims = [-1])]
+        else:
+            hr_data = [self.hr_image]
+            lr_data = [self.lr_image]
         EPOCHS = tqdm(range(start_epoch, end_epoch))
         color_jitter = kornia.augmentation.ColorJitter(0.1, 0.1, 0.1, 0.1)
         blur = kornia.augmentation.RandomGaussianBlur((7, 7), (1.0, 1.0), p = 0.5)
@@ -568,8 +571,13 @@ class PetsGAN():
         w_loss = torch.tensor([0.0]).to(self.device)
         scale_factors = [0.8, 0.9, 1.0]
 
-        real_data_lr = [self.lr_image, torch.flip(self.lr_image, dims = [-1])]
-        real_data = [self.hr_image, torch.flip(self.hr_image, dims = [-1])]
+        if self.use_flip:
+            real_data_lr = [self.lr_image, torch.flip(self.lr_image, dims = [-1])]
+            real_data = [self.hr_image, torch.flip(self.hr_image, dims = [-1])]
+        else:
+            real_data_lr = [self.lr_image]
+            real_data = [self.hr_image]
+
         blur = kornia.augmentation.RandomGaussianBlur((7, 7), (1, 1), p = 0.5)
         noiseaug = kornia.augmentation.RandomGaussianNoise(0, 0.3, p = 0.5)
         #############
@@ -689,19 +697,20 @@ class PetsGAN():
     def sample(self, patch_match_refine = True):
         if patch_match_refine is True:
             from Models.TTSR import TTSR
-            kernel_size =11
+            kernel_size = 11
             refiner = TTSR().to(self.device)
-            ref = torch.cat([self.hr_image, torch.flip(self.hr_image, dims = [-1])], dim = -1)
+            # ref = torch.cat([self.hr_image, torch.flip(self.hr_image, dims = [-1])], dim = -1)
+            ref = torch.cat([self.hr_image], dim = -1)
             fold_params_refiner = {'kernel_size': (kernel_size, kernel_size), 'padding': kernel_size // 2, 'stride': 2,
-                           'dilation': 1}
+                                   'dilation': 1}
             divisor_refiner = functions.getDivisor(self.hr_image, fold_params_refiner)
 
         which_G = self.co_G_ema if self.use_ema else self.co_G
-        for i in range(30):
+        for i in range(36):
             z = torch.randn(1, 1, self.lr_h, self.lr_w).to(self.device)
             lr = which_G(z)
             lr_pm, _ = self.lpm(lr, self.ref_image, fold_params = self.fold_params, divisor = self.divisor,
-                         n = self.lpm_iter, hard = False, tao = 0.00001)
+                                n = self.lpm_iter, hard = False, tao = 0.00001)
             hr = self.co_recnet(lr_pm)
             functions.save_image(hr,
                                  '{}/{}.jpg'.format(str(self.save_final_syntheses_dir), 'hr' + str(i)),
@@ -709,8 +718,8 @@ class PetsGAN():
 
             if patch_match_refine is True:
                 hr_refined, _ = refiner(hr, ref, ref,
-                                       fold_params = fold_params_refiner,
-                                       divisor = divisor_refiner, n = 10, lv = 1, skip =4, return_img = True)
+                                        fold_params = fold_params_refiner,
+                                        divisor = divisor_refiner, n = 10, lv = 1, skip = 4, return_img = True)
 
                 functions.save_image(hr_refined,
                                      '{}/{}.jpg'.format(str(self.save_final_syntheses_dir), 'hr_refined' + str(i)),
@@ -721,9 +730,9 @@ class PetsGAN():
         ttsr = TTSR().to(self.divisor)
         self.save_hr_dir = self.save_dir / 'high_resolution'
         self.save_hr_dir.mkdir(parents = True, exist_ok = True)
-        from Models.models import hrnet # hrnet is an up-sampling network
+        from Models.models import hrnet  # hrnet is an up-sampling network
         up_factor = opt.max_size // 256
-        self.hrnet = hrnet(dim =64, up_factor = up_factor).to(self.device)
+        self.hrnet = hrnet(dim = 64, up_factor = up_factor).to(self.device)
         torchsummary.summary(self.hrnet, input_size = (3, self.hr_h, self.hr_w))
 
         hr_h = up_factor * self.hr_h
@@ -743,7 +752,7 @@ class PetsGAN():
         fold_params = {'kernel_size': (ks, ks), 'padding': ks // 2, 'stride': 2, 'dilation': 1}
         divisor = functions.getDivisor(fake_probe, fold_params)
         fake_probe, _ = ttsr(fake_probe, ref, ref, fold_params = fold_params,
-                                   divisor = divisor, n = 10, lv = 1, skip = 4, return_img = True)
+                             divisor = divisor, n = 10, lv = 1, skip = 4, return_img = True)
 
         functions.save_image(fake_hr, f'{str(self.save_hr_dir)}/fake.png',
                              nrow = 1)
@@ -753,7 +762,6 @@ class PetsGAN():
                              nrow = 1)
         functions.save_image(self.hr_image, f'{str(self.save_hr_dir)}/lr.png',
                              nrow = 1)
-
 
         start_epoch = 0
         optimizer_hrnet = torch.optim.Adam(self.hrnet.parameters(), lr = 1e-4)
@@ -771,7 +779,6 @@ class PetsGAN():
         EPOCHS = tqdm(range(start_epoch, end_epoch))
         save_epoch = 100
 
-
         real_data = [hr, torch.flip(hr, dims = [-1])]
         real_data_lr = [self.hr_image, torch.flip(self.hr_image, dims = [-1])]
         real_hr = torch.cat(real_data)
@@ -779,13 +786,13 @@ class PetsGAN():
         #############
         for epoch in EPOCHS:
             if self.opt.hr_batch == 2:
-                index =[0,1]
+                index = [0, 1]
             else:
                 index = [random.randint(0, 1)]
 
             optimizer_hrnet.zero_grad()
-            rec = self.hrnet(real_lr[index,...])
-            rec_loss =  F.mse_loss(rec, real_hr[index,...])
+            rec = self.hrnet(real_lr[index, ...])
+            rec_loss = F.mse_loss(rec, real_hr[index, ...])
             rec_loss.backward()
             optimizer_hrnet.step()
 
@@ -794,7 +801,7 @@ class PetsGAN():
                 if (epoch + 1) % save_epoch == 0 or epoch == 0:
                     self.co_G_ema.eval()
                     torch.save({'hrnet': self.hrnet.state_dict(),
-                                 'optimizer_G': optimizer_hrnet.state_dict(),
+                                'optimizer_G': optimizer_hrnet.state_dict(),
                                 'epoch': epoch + 1},
                                f'{str(self.save_weight_dir)}/hr.pth')
                     # fake = self.G(_noise)
@@ -806,8 +813,7 @@ class PetsGAN():
                                          nrow = 1)
                     del save_hr
 
-
-        for i in range(30):
+        for i in range(36):
             noise = torch.randn(1, 1, self.lr_h, self.lr_w).to(self.device)
             with torch.no_grad():
                 fake_lr, _ = self.lpm(self.co_G(noise), self.ref_image, fold_params = self.fold_params,
@@ -818,7 +824,7 @@ class PetsGAN():
                 if i == 0:
                     divisor = functions.getDivisor(fake_hr_, fold_params)
                 fake_hr_pm, _ = ttsr(fake_hr_, ref, ref, fold_params = fold_params,
-                                     divisor = divisor, n = 10, lv =1, skip = 4, return_img = True)
+                                     divisor = divisor, n = 10, lv = 1, skip = 4, return_img = True)
                 fake_hr_pm = self.hrnet(fake_hr_pm)
                 functions.save_image(fake_hr_pm, f'{str(self.save_hr_dir)}/hr_{i}.png',
                                      nrow = 1)
@@ -833,14 +839,15 @@ if __name__ == '__main__':
     parser.add_argument('--hiddenprints', type = bool, default = True)
     parser.add_argument('--model_name', type = str, default = 'test')
     parser.add_argument('--input_dir', type = str, default = 'Input')
-    parser.add_argument('--image_name', type = str, default = 'angkorwat.jpg')
+    parser.add_argument('--image_name', type = str, default = 'angkorwat.png')
     parser.add_argument('--save_dir', type = str, default = 'Result')
     parser.add_argument('--load_pretrained', type = str, default = 'True')
     parser.add_argument('--beta', type = float, default = 0.1)
     parser.add_argument('--downscale_factor', type = float, default = 8)
     parser.add_argument('--ref_model', type = str, default = 'test')
-    parser.add_argument('--max_size', type = int, default = 256, help ='an integer multiple of 256')
+    parser.add_argument('--max_size', type = int, default = 256, help = 'an integer multiple of 256')
     parser.add_argument('--lpm_hard', type = bool, default = False)
+    parser.add_argument('--use_flip', type = bool, default = True)
 
     # weight
     parser.add_argument('--co_weight_beta', type = float, default = 100)
@@ -874,7 +881,7 @@ if __name__ == '__main__':
     parser.add_argument('--gan_epoch', type = int, default = 5000)
     parser.add_argument('--D_iter', type = int, default = 1)
     parser.add_argument('--G_iter', type = int, default = 1)
-    parser.add_argument('--gan_save_epoch', type = int, default = 50)
+    parser.add_argument('--gan_save_epoch', type = int, default = 200)
 
     parser.add_argument('--recnet_epoch', type = int, default = 5000)
     parser.add_argument('--recnet_save_epoch', type = int, default = 500)
@@ -910,7 +917,7 @@ if __name__ == '__main__':
 
     SinGAN = PetsGAN(opt)
     if opt.ref_model is not None:
-        SinGAN._copy_weights(model_name = opt.ref_model, gan = True, lpm = True, recnet = True, co = False)
+        SinGAN._copy_weights(model_name = opt.ref_model, gan = True)
     SinGAN._init_all(gan = True, pm = True, recnet = True, co = True, load_gan = True, load_lpm = True,
                      load_recnet = True, load_co = True)
     SinGAN.external_learning()
